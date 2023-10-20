@@ -41,6 +41,19 @@ if __name__ == '__main__':
         COLUMN_FINISH,
         COLUMN_STATUS
     ])
+
+    print('Shape BEFORE dropping NA rows: ', csv.shape)
+
+    csv = csv.dropna(
+        subset=[
+            COLUMN_TOTAL_REPEAT,
+            COLUMN_TOTAL_ACROSS,
+            COLUMN_FEET_PER_MINUTE
+        ]
+    )
+
+    print('Shape AFTER dropping NA rows: ', csv.shape)
+
     csv = normalize_columns(
         csv,
         [
@@ -60,6 +73,8 @@ if __name__ == '__main__':
         ]
     )
 
-    print(csv.head())
-    print(csv.columns)
+    csv.to_csv('./output_data/processed_press_logs.csv', index=False)
+
+    print('CSV statistics: ', csv.describe())
+
 
