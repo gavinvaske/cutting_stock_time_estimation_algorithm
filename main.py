@@ -18,6 +18,7 @@ MINIMUM_JOB_LENGTH_ACCEPTED = 400
 FINISH_TYPE_NO_FINISH = 'NO_FINISH'
 FINISH_TYPE_UV = 'UV'
 FINISH_TYPE_LAMINATION = 'LAMINATION'
+TARGET_VARIABLE_GROUP_SIZE = 30
 
 def normalize(data_frame, column_name):
     return MinMaxScaler().fit_transform(np.array(data_frame[column_name]).reshape(-1, 1))
@@ -63,6 +64,7 @@ if __name__ == '__main__':
             COLUMN_LENGTH_FEET
         ]
     )
+    csv[COLUMN_FEET_PER_MINUTE] = csv[COLUMN_FEET_PER_MINUTE].apply(lambda x: round(x / TARGET_VARIABLE_GROUP_SIZE) * TARGET_VARIABLE_GROUP_SIZE)
 
     print('Shape AFTER dropping NA rows: ', csv.shape)
 
@@ -114,10 +116,10 @@ if __name__ == '__main__':
     print('\nPrinting X shape: ', X.shape)
     print('\nPrinting X columns: ', X.columns)
 
-    X_train, X_test, y_train, y_test = train_test_split(X.to_numpy(), y.to_numpy(), random_state=1, test_size=0.10)
+    X_train, X_test, y_train, y_test = train_test_split(X.to_numpy(), y.to_numpy(), test_size=0.15)
 
-    #clf = MLPClassifier(solver='lbfgs', hidden_layer_sizes=(36,24,12,6), max_iter=1000).fit(X_train, y_train)
-    clf = MLPRegressor(solver='lbfgs', random_state=1, max_iter=1000).fit(X_train, y_train)
+    clf = MLPClassifier(solver='lbfgs', hidden_layer_sizes=(6), max_iter=5000).fit(X_train, y_train)
+    # clf = MLPRegressor(solver='lbfgs', random_state=1, max_iter=5000).fit(X_train, y_train)
 
     # Expect: 55
     guessIt = np.array([0.05725190839694656,0.9494949494949496, True, False, False, False, False, False, True, False])
