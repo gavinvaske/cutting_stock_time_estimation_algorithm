@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 from sklearn.neural_network import MLPClassifier
+from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split
 
 COLUMN_DIE_NUMBER = 'DIE NUMBER'
@@ -12,7 +13,7 @@ COLUMN_LENGTH_FEET = 'Length FT'
 COLUMN_STATUS = 'Status'
 COLUMN_FEET_PER_MINUTE = 'Feet/Min'
 
-MINIMUM_JOB_LENGTH_ACCEPTED = 300
+MINIMUM_JOB_LENGTH_ACCEPTED = 400
 
 FINISH_TYPE_NO_FINISH = 'NO_FINISH'
 FINISH_TYPE_UV = 'UV'
@@ -25,6 +26,9 @@ def normalize_columns(dataframe, column_names):
     for column_name in column_names:
         dataframe[column_name] = normalize(dataframe, column_name)
     return dataframe
+
+def de_normalize(normalized_value, max, min):
+    return (normalized_value * (max - min) + min);
 
 def fill_na_values_in_column(dataframe, column_name, new_value):
     dataframe[column_name] = dataframe[column_name].fillna(new_value)
@@ -77,9 +81,6 @@ if __name__ == '__main__':
         ]
     )
 
-    csv = fill_na_values_in_column(csv, COLUMN_FINISH, FINISH_TYPE_NO_FINISH)
-    csv = fill_na_values_in_column(csv, COLUMN_STATUS, 'NO_STATUS')
-
     # Uppercase all values before executing regex expressions
     csv[COLUMN_FINISH] = csv[COLUMN_FINISH].str.upper()
     csv[COLUMN_FINISH] = csv[COLUMN_FINISH].replace(regex={
@@ -87,6 +88,9 @@ if __name__ == '__main__':
         r'.*(UV).*': FINISH_TYPE_UV,            # Replace any *UV* Finish types with "UV"
         r'.*(\d).*': FINISH_TYPE_LAMINATION     # Replace any Finish type containing a number with "LAMINATION"
     })
+
+    csv = fill_na_values_in_column(csv, COLUMN_FINISH, FINISH_TYPE_NO_FINISH)
+    csv = fill_na_values_in_column(csv, COLUMN_STATUS, 'NO_STATUS')
 
     csv = one_hot_encode_columns(
         csv,
@@ -101,7 +105,7 @@ if __name__ == '__main__':
 
     csv.to_csv('./output_data/processed_press_logs.csv', index=False)
 
-    print('CSV statistics: ', csv.describe())
+    print('CSV statistics (after normailization): ', csv.describe())
 
     y = csv[COLUMN_FEET_PER_MINUTE]
     X = csv.drop([COLUMN_FEET_PER_MINUTE, COLUMN_DIE_NUMBER, COLUMN_LENGTH_FEET], axis=1)
@@ -110,10 +114,15 @@ if __name__ == '__main__':
     print('\nPrinting X shape: ', X.shape)
     print('\nPrinting X columns: ', X.columns)
 
-    X_train, X_test, y_train, y_test = train_test_split(X.to_numpy(), y.to_numpy(), test_size=0.20, random_state=1)
+    X_train, X_test, y_train, y_test = train_test_split(X.to_numpy(), y.to_numpy(), random_state=1, test_size=0.10)
 
-    clf = MLPClassifier(random_state=1, max_iter=300).fit(X_train, y_train)
+    #clf = MLPClassifier(solver='lbfgs', hidden_layer_sizes=(36,24,12,6), max_iter=1000).fit(X_train, y_train)
+    clf = MLPRegressor(solver='lbfgs', random_state=1, max_iter=1000).fit(X_train, y_train)
 
+    # Expect: 55
+    guessIt = np.array([0.05725190839694656,0.9494949494949496, True, False, False, False, False, False, True, False])
+    result = clf.predict(guessIt.reshape(1, -1))
+    print('result: ', result)
     mlp_prediction_score = clf.score(X_test, y_test)
 
     print('Resulting score: ', mlp_prediction_score)
