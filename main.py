@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.neural_network import MLPClassifier
 from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split
+from sklearn import linear_model
 
 COLUMN_DIE_NUMBER = 'DIE NUMBER'
 COLUMN_TOTAL_REPEAT = 'Total Repeat'
@@ -54,7 +55,7 @@ def print_pearson_correlation_coefficients(X, y):
     print('\n')
 
 if __name__ == '__main__':
-    csv = pd.read_csv('./input_data/press_logs.csv', usecols=[
+    csv = pd.read_csv('input_data/press_logs.csv', usecols=[
         COLUMN_DIE_NUMBER,
         COLUMN_TOTAL_REPEAT,
         COLUMN_TOTAL_ACROSS,
@@ -74,7 +75,7 @@ if __name__ == '__main__':
             COLUMN_LENGTH_FEET
         ]
     )
-    csv[COLUMN_FEET_PER_MINUTE] = csv[COLUMN_FEET_PER_MINUTE].apply(lambda x: round(x / TARGET_VARIABLE_GROUP_SIZE) * TARGET_VARIABLE_GROUP_SIZE)
+    #csv[COLUMN_FEET_PER_MINUTE] = csv[COLUMN_FEET_PER_MINUTE].apply(lambda x: round(x / TARGET_VARIABLE_GROUP_SIZE) * TARGET_VARIABLE_GROUP_SIZE)
 
     print('Shape AFTER dropping NA rows: ', csv.shape)
 
@@ -130,16 +131,37 @@ if __name__ == '__main__':
 
     print_pearson_correlation_coefficients(X, y)
 
+    # Ridge Linear Regression
+    ridge_linear_regression = linear_model.Ridge(alpha=0.5, positive=True).fit(X_train, y_train)
+    ridge_linear_regression_score = ridge_linear_regression.score(X_test, y_test)
 
-    clf = MLPClassifier(solver='lbfgs', hidden_layer_sizes=(6), max_iter=5000).fit(X_train, y_train)
-    # # clf = MLPRegressor(solver='lbfgs', random_state=1, max_iter=5000).fit(X_train, y_train)
+    # Linear Regression
+    linear_regression = linear_model.LinearRegression().fit(X_train, y_train)
+    linear_regression_score = linear_regression.score(X_test, y_test)
 
-    # # Expect: 55
-    guessIt = np.array([0.05725190839694656,0.9494949494949496, True, False, False, False, False, False, True, False])
-    result = clf.predict(guessIt.reshape(1, -1))
-    print('result: ', result)
-    mlp_prediction_score = clf.score(X_test, y_test)
+    # MLP Regressor
+    mlp_regressor = MLPRegressor(solver='lbfgs', random_state=1, max_iter=5000).fit(X_train, y_train)
+    mlp_regressor_score = mlp_regressor.score(X_test, y_test)
 
-    print('Resulting score: ', mlp_prediction_score)
+    # Lasso Regression
+    lasso_regression = linear_model.Lasso(alpha=0.5).fit(X_train, y_train)
+    lasso_regression_score = lasso_regression.score(X_test, y_test)
+
+    print('#### R^2 SCORES ####')
+    print('Ridge R^2 score = ', ridge_linear_regression_score)
+    print('Linear-Regression R^2 score = ', linear_regression_score)
+    print('MLP R^2 score = ', mlp_regressor_score)
+    print('Lasso R^2 score = ', lasso_regression_score)
+
+    print('\n#### Algorithm Predictions ####')
+
+    sample = X_test[0]
+    correct_prediction = y_test[0]
+    print('About to predict: ', sample, '\nHoping to get a value of: ', correct_prediction)
+    print('\n')
+    print('Ridge Guess: ', ridge_linear_regression.predict(sample.reshape(1, -1)))
+    print('Linear-Regression Guess: ', linear_regression.predict(sample.reshape(1, -1)))
+    print('MLP Guess: ', mlp_regressor.predict(sample.reshape(1, -1)))
+    print('Lasso Guess: ', lasso_regression.predict(sample.reshape(1, -1)))
 
 
