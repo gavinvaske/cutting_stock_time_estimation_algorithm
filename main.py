@@ -1,4 +1,5 @@
 import pandas as pd
+from sklearn.feature_selection import r_regression
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 from sklearn.neural_network import MLPClassifier
@@ -42,6 +43,15 @@ def one_hot_encode_columns(dataframe, column_names):
         dataframe = dataframe.drop(column_name, axis=1)
         dataframe = dataframe.join(one_hot)
     return dataframe
+
+def print_pearson_correlation_coefficients(X, y):
+    pearson_correlations = r_regression(X.to_numpy(), y.to_numpy())
+    n_attributes = X.columns.size
+
+    print('\n')
+    for x in range(n_attributes):
+        print('Column: ', X.columns[x], ': Pearson Correlation: ', pearson_correlations[x])
+    print('\n')
 
 if __name__ == '__main__':
     csv = pd.read_csv('./input_data/press_logs.csv', usecols=[
@@ -118,10 +128,13 @@ if __name__ == '__main__':
 
     X_train, X_test, y_train, y_test = train_test_split(X.to_numpy(), y.to_numpy(), test_size=0.15)
 
-    clf = MLPClassifier(solver='lbfgs', hidden_layer_sizes=(6), max_iter=5000).fit(X_train, y_train)
-    # clf = MLPRegressor(solver='lbfgs', random_state=1, max_iter=5000).fit(X_train, y_train)
+    print_pearson_correlation_coefficients(X, y)
 
-    # Expect: 55
+
+    clf = MLPClassifier(solver='lbfgs', hidden_layer_sizes=(6), max_iter=5000).fit(X_train, y_train)
+    # # clf = MLPRegressor(solver='lbfgs', random_state=1, max_iter=5000).fit(X_train, y_train)
+
+    # # Expect: 55
     guessIt = np.array([0.05725190839694656,0.9494949494949496, True, False, False, False, False, False, True, False])
     result = clf.predict(guessIt.reshape(1, -1))
     print('result: ', result)
