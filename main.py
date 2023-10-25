@@ -1,11 +1,13 @@
 import pandas as pd
+from sklearn.dummy import DummyRegressor
 from sklearn.feature_selection import r_regression
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-from sklearn.neural_network import MLPClassifier
 from sklearn.neural_network import MLPRegressor
 from sklearn.model_selection import train_test_split
 from sklearn import linear_model
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 COLUMN_DIE_NUMBER = 'DIE NUMBER'
 COLUMN_TOTAL_REPEAT = 'Total Repeat'
@@ -15,7 +17,7 @@ COLUMN_LENGTH_FEET = 'Length FT'
 COLUMN_STATUS = 'Status'
 COLUMN_FEET_PER_MINUTE = 'Feet/Min'
 
-MINIMUM_JOB_LENGTH_ACCEPTED = 400
+MINIMUM_JOB_LENGTH_ACCEPTED = 1
 
 FINISH_TYPE_NO_FINISH = 'NO_FINISH'
 FINISH_TYPE_UV = 'UV'
@@ -54,8 +56,66 @@ def print_pearson_correlation_coefficients(X, y):
         print('Column: ', X.columns[x], ': Pearson Correlation: ', pearson_correlations[x])
     print('\n')
 
+def remove_outliers(dataframe):
+    lower_limit_ft_per_min = 1
+    lower_limit_length = 1
+
+    print('shape BEFORE removing outliers: ', dataframe.shape)
+    dataframe = dataframe[(dataframe[COLUMN_FEET_PER_MINUTE] > lower_limit_ft_per_min)]
+    dataframe = dataframe[(dataframe[COLUMN_LENGTH_FEET] > lower_limit_length)]
+    print('shape AFTER removing outliers: ', dataframe.shape)
+
+    return dataframe
+
+def clean_data(dataframe):
+    print('Shape BEFORE dropping NA rows: ', dataframe.shape)
+    dataframe = dataframe.dropna(
+        subset=[
+            COLUMN_TOTAL_REPEAT,
+            COLUMN_TOTAL_ACROSS,
+            COLUMN_FEET_PER_MINUTE
+        ]
+    )
+    print('Shape AFTER dropping NA rows: ', dataframe.shape)
+
+    # Remove commas from columns, (Ex: 2,321 is interpreted as a string until the comma is removed)
+    dataframe = dataframe.replace(',', '', regex=True)
+    dataframe[COLUMN_LENGTH_FEET] = pd.to_numeric(dataframe[COLUMN_LENGTH_FEET])
+
+    dataframe = remove_outliers(dataframe)
+
+    dataframe = normalize_columns(
+        dataframe,
+        [
+            COLUMN_TOTAL_REPEAT,
+            COLUMN_TOTAL_ACROSS,
+            COLUMN_LENGTH_FEET
+        ]
+    )
+
+    # # Uppercase all values before executing regex expressions
+    dataframe[COLUMN_FINISH] = dataframe[COLUMN_FINISH].str.upper()
+    dataframe[COLUMN_FINISH] = dataframe[COLUMN_FINISH].replace(regex={
+        r'(-){2,}': FINISH_TYPE_NO_FINISH,      # Replace any finish containing at least "--" to "NO_FINISH"
+        r'.*(UV).*': FINISH_TYPE_UV,            # Replace any *UV* Finish types with "UV"
+        r'.*(\d).*': FINISH_TYPE_LAMINATION     # Replace any Finish type containing a number with "LAMINATION"
+    })
+
+    dataframe = fill_na_values_in_column(dataframe, COLUMN_FINISH, FINISH_TYPE_NO_FINISH)
+    dataframe = fill_na_values_in_column(dataframe, COLUMN_STATUS, 'NO_STATUS')
+
+    dataframe = one_hot_encode_columns(
+        dataframe,
+        [
+            COLUMN_FINISH,
+            COLUMN_STATUS
+        ]
+    )
+
+    return dataframe
+
 if __name__ == '__main__':
-    csv = pd.read_csv('input_data/press_logs.csv', usecols=[
+    csv = pd.read_csv('input_data/press_logs_with_status.csv', usecols=[
         COLUMN_DIE_NUMBER,
         COLUMN_TOTAL_REPEAT,
         COLUMN_TOTAL_ACROSS,
@@ -65,89 +125,58 @@ if __name__ == '__main__':
         COLUMN_STATUS
     ])
 
-    print('Shape BEFORE dropping NA rows: ', csv.shape)
+    csv = clean_data(csv)
 
-    csv = csv.dropna(
-        subset=[
-            COLUMN_TOTAL_REPEAT,
-            COLUMN_TOTAL_ACROSS,
-            COLUMN_FEET_PER_MINUTE,
-            COLUMN_LENGTH_FEET
-        ]
-    )
-    #csv[COLUMN_FEET_PER_MINUTE] = csv[COLUMN_FEET_PER_MINUTE].apply(lambda x: round(x / TARGET_VARIABLE_GROUP_SIZE) * TARGET_VARIABLE_GROUP_SIZE)
+    ## PRINTING STATISTICS about dataset
+    print(csv[COLUMN_FEET_PER_MINUTE].describe())
 
-    print('Shape AFTER dropping NA rows: ', csv.shape)
+    plt.hist(csv[COLUMN_FEET_PER_MINUTE], bins=20)
+    plt.xlabel('Feet per Second')
+    plt.ylabel('Count')
+    plt.show()
 
-    # Remove commas from columns, (Ex: 2,321 is interpreted as a string until the comma is removed)
-    csv = csv.replace(',', '', regex=True)
-    csv[COLUMN_LENGTH_FEET] = pd.to_numeric(csv[COLUMN_LENGTH_FEET])
-
-    # Drop rows whose "LENGTH FT" is too small (i.e. small sample size) to avoid confusing the neural network during training
-    csv.drop(csv[csv[COLUMN_LENGTH_FEET] < MINIMUM_JOB_LENGTH_ACCEPTED].index, inplace=True)
-
-    csv = normalize_columns(
-        csv,
-        [
-            COLUMN_TOTAL_REPEAT,
-            COLUMN_TOTAL_ACROSS
-        ]
-    )
-
-    # Uppercase all values before executing regex expressions
-    csv[COLUMN_FINISH] = csv[COLUMN_FINISH].str.upper()
-    csv[COLUMN_FINISH] = csv[COLUMN_FINISH].replace(regex={
-        r'(-){2,}': FINISH_TYPE_NO_FINISH,      # Replace any finish containing at least "--" to "NO_FINISH"
-        r'.*(UV).*': FINISH_TYPE_UV,            # Replace any *UV* Finish types with "UV"
-        r'.*(\d).*': FINISH_TYPE_LAMINATION     # Replace any Finish type containing a number with "LAMINATION"
-    })
-
-    csv = fill_na_values_in_column(csv, COLUMN_FINISH, FINISH_TYPE_NO_FINISH)
-    csv = fill_na_values_in_column(csv, COLUMN_STATUS, 'NO_STATUS')
-
-    csv = one_hot_encode_columns(
-        csv,
-        [
-            COLUMN_FINISH,
-            COLUMN_STATUS
-        ]
-    )
-    print('Shape BEFORE removing small jobs: ', csv.shape)
-
-    print('Shape AFTER removing small jobs: ', csv.shape)
+    cor = csv.drop([COLUMN_DIE_NUMBER], axis=1).corr()
+    sns.heatmap(cor, annot=True, cmap=plt.cm.Reds)
+    plt.show()
 
     csv.to_csv('./output_data/processed_press_logs.csv', index=False)
 
     print('CSV statistics (after normailization): ', csv.describe())
 
     y = csv[COLUMN_FEET_PER_MINUTE]
-    X = csv.drop([COLUMN_FEET_PER_MINUTE, COLUMN_DIE_NUMBER, COLUMN_LENGTH_FEET], axis=1)
+    X = csv[[COLUMN_TOTAL_ACROSS, COLUMN_LENGTH_FEET, 'Status_NO_STATUS']]   # Select Columns Highly correlatted to target variable but not highly correlated to one another
 
     print('\nPrinting Y shape: ', y.shape)
     print('\nPrinting X shape: ', X.shape)
     print('\nPrinting X columns: ', X.columns)
 
-    X_train, X_test, y_train, y_test = train_test_split(X.to_numpy(), y.to_numpy(), test_size=0.15)
+    X_train, X_test, y_train, y_test = train_test_split(X.to_numpy(), y.to_numpy(), test_size=0.25)
+
 
     print_pearson_correlation_coefficients(X, y)
+
+    # Dummy Regressor (a baseline-model that always predicts the mean of the target variable)
+    dummy_regressor = DummyRegressor(strategy='constant', constant=73).fit(X_train, y_train)
+    dummy_regressor_score = dummy_regressor.score(X_test, y_test)
 
     # Ridge Linear Regression
     ridge_linear_regression = linear_model.Ridge(alpha=0.5, positive=True).fit(X_train, y_train)
     ridge_linear_regression_score = ridge_linear_regression.score(X_test, y_test)
 
     # Linear Regression
-    linear_regression = linear_model.LinearRegression().fit(X_train, y_train)
+    linear_regression = linear_model.LinearRegression(positive=True).fit(X_train, y_train)
     linear_regression_score = linear_regression.score(X_test, y_test)
 
     # MLP Regressor
-    mlp_regressor = MLPRegressor(solver='lbfgs', random_state=1, max_iter=5000).fit(X_train, y_train)
+    mlp_regressor = MLPRegressor(solver='lbfgs', hidden_layer_sizes=(5), max_iter=5000).fit(X_train, y_train)
     mlp_regressor_score = mlp_regressor.score(X_test, y_test)
 
     # Lasso Regression
-    lasso_regression = linear_model.Lasso(alpha=0.5).fit(X_train, y_train)
+    lasso_regression = linear_model.Lasso(alpha=0.5, positive=True).fit(X_train, y_train)
     lasso_regression_score = lasso_regression.score(X_test, y_test)
 
     print('#### R^2 SCORES ####')
+    print('Dummy Regressor (baseline algorithm) R^2 score = ', dummy_regressor_score)
     print('Ridge R^2 score = ', ridge_linear_regression_score)
     print('Linear-Regression R^2 score = ', linear_regression_score)
     print('MLP R^2 score = ', mlp_regressor_score)
@@ -155,13 +184,34 @@ if __name__ == '__main__':
 
     print('\n#### Algorithm Predictions ####')
 
-    sample = X_test[0]
+    sample = X_test[0].reshape(1, -1)
     correct_prediction = y_test[0]
     print('About to predict: ', sample, '\nHoping to get a value of: ', correct_prediction)
     print('\n')
-    print('Ridge Guess: ', ridge_linear_regression.predict(sample.reshape(1, -1)))
-    print('Linear-Regression Guess: ', linear_regression.predict(sample.reshape(1, -1)))
-    print('MLP Guess: ', mlp_regressor.predict(sample.reshape(1, -1)))
-    print('Lasso Guess: ', lasso_regression.predict(sample.reshape(1, -1)))
+    print('Dummy-Regressor Guess: ', dummy_regressor.predict(sample))
+    print('Ridge Guess: ', ridge_linear_regression.predict(sample))
+    print('Linear-Regression Guess: ', linear_regression.predict(sample))
+    print('MLP Guess: ', mlp_regressor.predict(sample))
+    print('Lasso Guess: ', lasso_regression.predict(sample))
+
+
+    # Predict all rows of the original dataset and output results to a CSV file
+    dummy_regressor_predictions = dummy_regressor.predict(X.to_numpy())
+    ridge_linear_regression_predictions = ridge_linear_regression.predict(X.to_numpy())
+    linear_regression_predictions = linear_regression.predict(X.to_numpy())
+    mlp_regressor_predictions = mlp_regressor.predict(X.to_numpy())
+    lasso_regression_predictions = lasso_regression.predict(X.to_numpy())
+
+    predictions = {
+        'Die Number': csv[COLUMN_DIE_NUMBER],
+        'Actual ft/min': csv[COLUMN_FEET_PER_MINUTE],
+        'Storms Dummy Guess': dummy_regressor_predictions,
+        'Ridge Linear Regression': ridge_linear_regression_predictions,
+        'Linear Regression': linear_regression_predictions,
+        'Neural Network': mlp_regressor_predictions,
+        'Lasso Regression': lasso_regression_predictions
+    }
+
+    pd.DataFrame(predictions).to_csv('./output_data/predictions.csv', index=None, )
 
 
